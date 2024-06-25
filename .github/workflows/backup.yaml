@@ -1,0 +1,33 @@
+name: Update servise
+
+on:
+ push:
+   branches:
+     - master
+
+jobs:
+  build_push_image_update_services:
+  runs-on: ubuntu-latest # на какой системе будет запускатся хоть виндоус хоть мак
+  steps:
+    - name: Chekout # имена можно не указывать(этот шаг закидывает на сервер наши файлы)
+      uses: actions/checkout@v2
+
+    - name: Build and push image # это наш уже код который создает образ
+      run: |
+        docker build . --file Dockerfile --tag suput/python-backend
+        docker tag suput/python-backend suput/python-backend:latest
+        docker tag suput/python-backend suput/python-backend:${{ github.run_number }}
+        echo "{{ secrets.DOCKER_HUB_PASSWORD }}" | docker login - u suput --password-stdin
+        docker push suput/python-backend:latest
+        docker push suput/python-backend:${{ github.run_number }}
+
+    - name:  Update service on remote Host
+        uses: appleboy/ssh-action@master
+        env:
+          IMAGE: suput/python-backend:${{ github.run_number }}
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD_FROM_HOST }}
+          envs: IMAGE
+          script: docker service uograde --image $IMAGE python_backend

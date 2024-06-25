@@ -1,0 +1,46 @@
+name: Update servise
+
+on:
+ push:
+   branches:
+     - master
+
+# env:
+#   SERVISE_NAMT: python_backend
+#   IMAGE_NAME: suput/python-backend
+
+jobs:
+  build_push_image:
+  runs-on: ubuntu-latest # на какой системе будет запускатся хоть виндоус хоть мак
+  steps:
+    - name: Chekout # имена можно не указывать(этот шаг закидывает на сервер наши файлы)
+      uses: actions/checkout@v2
+
+    - name: Build docker image # это наш уже код который создает образ
+      run: docker build . --file Dockerfile --tag suput/python-backend 
+    
+    - name: Log in to registry # шаг входа в регист т.е на докер хаб(что бы зайти от своего имени)
+      run: echo "{{ secrets.DOCKER_HUB_PASSWORD }}" | docker login - u suput --password-stdin # мой пароль
+
+    - name: Push image # собраный образ пометить и  отправить
+      run: |
+        docker tag suput/python-backend suput/python-backend:latest
+        docker tag suput/python-backend suput/python-backend:${{ github.run_number }}
+        docker push suput/python-backend:latest
+        docker push suput/python-backend:${{ github.run_number }}
+  update service:
+    needs: [build_push_image] # зависимость
+    runs-on: ubuntu-latest
+    steps:
+      - name:  Update service on remote Host
+        uses: appleboy/ssh-action@master
+        env:
+          IMAGE: suput/python-backend:${{ github.run_number }}
+         # SERVISE: python_backend
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          # key: ${{ secrets.PRIVATE_SSH_KEY }}
+          password: ${{ secrets.PASSWORD_FROM_HOST }}
+          envs: IMAGE #, SERVICE
+          script: docker service uograde --image $IMAGE python_backend #--with-registry-auth # @SERVISE вместо этого поставил python_backend
